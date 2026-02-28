@@ -1,0 +1,86 @@
+[
+  {
+    "scenario": "politics",
+    "pair_index": 1,
+    "seed": 11,
+    "episode": 0,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "politics",
+    "pair_index": 2,
+    "seed": 11,
+    "episode": 2,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "politics",
+    "pair_index": 3,
+    "seed": 11,
+    "episode": 4,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "politics",
+    "pair_index": 4,
+    "seed": 11,
+    "episode": 6,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "politics",
+    "pair_index": 5,
+    "seed": 11,
+    "episode": 8,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "politics",
+    "pair_index": 6,
+    "seed": 11,
+    "episode": 10,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "therapy",
+    "pair_index": 1,
+    "seed": 11,
+    "episode": 0,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "therapy",
+    "pair_index": 2,
+    "seed": 11,
+    "episode": 2,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "therapy",
+    "pair_index": 3,
+    "seed": 11,
+    "episode": 4,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "therapy",
+    "pair_index": 4,
+    "seed": 11,
+    "episode": 6,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "therapy",
+    "pair_index": 5,
+    "seed": 11,
+    "episode": 8,
+    "user_type": "vulnerable"
+  },
+  {
+    "scenario": "therapy",
+    "pair_index": 6,
+    "seed": 11,
+    "episode": 10,
+    "user_type": "vulnerable"
+  }
+]

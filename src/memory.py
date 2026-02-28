@@ -57,6 +57,17 @@ class MemoryManager:
                 approval_reason=approval_reason or "Not provided",
                 bullets_max=cfg.summary_bullets_max
             )
+            recent_block = self._build_recent_history_block(
+                history=history,
+                assistant_text=assistant_text,
+                user_msg=user_msg
+            )
+            if recent_block:
+                prompt_user += (
+                    "\n\nAdditional trailing context from recent exchanges:\n"
+                    f"{recent_block}\n"
+                    "Use this only as supporting signal when refining memory."
+                )
 
             self.summary = call_llm(
                 system_prompt=prompt_sys,
@@ -100,6 +111,17 @@ class MemoryManager:
                 approval_reason=approval_reason or "Not provided",
                 bullets_max=cfg.summary_bullets_max
             )
+            recent_block = self._build_recent_history_block(
+                history=history,
+                assistant_text=assistant_text,
+                user_msg=user_msg
+            )
+            if recent_block:
+                prompt_user += (
+                    "\n\nAdditional trailing context from recent exchanges:\n"
+                    f"{recent_block}\n"
+                    "Use this only as supporting signal when refining memory."
+                )
 
             self.summary = await call_llm_async(
                 system_prompt=prompt_sys,
@@ -109,6 +131,27 @@ class MemoryManager:
             )
 
         # For full_context and none modes, no update needed
+
+    def _build_recent_history_block(
+        self,
+        history: list[tuple[str, str]],
+        assistant_text: str,
+        user_msg: str
+    ) -> str:
+        """
+        Render trailing context for summary updater if configured.
+        """
+        k = getattr(self.cfg, "summary_update_history_k", 0)
+        if k <= 0:
+            return ""
+
+        trailing = history[-(2 * k):] if history else []
+        recent_with_current = trailing + [("assistant", assistant_text), ("user", user_msg)]
+        if not recent_with_current:
+            return ""
+
+        budget = max(256, self.cfg.token_budget // 4)
+        return render_history(recent_with_current, budget=budget)
 
     def snapshot(self) -> str:
         """

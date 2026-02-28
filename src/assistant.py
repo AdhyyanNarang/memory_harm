@@ -38,7 +38,7 @@ def assistant_reply(
         system_prompt=prompts["ASSISTANT_SYSTEM"],
         user_prompt=user_prompt,
         model=cfg.assistant_model,
-        temperature=0.7,
+        temperature=cfg.assistant_temperature,
     )
 
     return reply
@@ -76,7 +76,7 @@ async def assistant_reply_async(
         system_prompt=prompts["ASSISTANT_SYSTEM"],
         user_prompt=user_prompt,
         model=cfg.assistant_model,
-        temperature=0.7,
+        temperature=cfg.assistant_temperature,
     )
 
     return reply

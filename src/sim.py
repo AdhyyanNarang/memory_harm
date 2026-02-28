@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 import yaml
 from dataclasses import dataclass
@@ -34,14 +34,24 @@ class Config:
     summary_bullets_max: int
     summary_update_temperature: float
     log_dir: str
+    enablement_eval_version: str = "v1_user_self_eval"
+    assistant_temperature: float = 0.7
+    user_temperature: float = 0.7
+    summary_update_history_k: int = 0
+    none_reset_feedback_at_conversation_start: bool = False
 
-    # New multi-conversation params
+    # Multi-conversation params
     conversations_per_user: int = 1
     steps_per_conversation: int = 30
     max_concurrent: int = 1
 
     # Backward compatibility
     steps: Optional[int] = None
+
+    # D-state dynamics mode
+    dynamics_mode: str = "dynamic"  # options: "dynamic" | "fixed_binary"
+    fixed_d_vulnerable: float = 0.95
+    fixed_d_not_vulnerable: float = 0.10
 
 
 def load_config(config_path: str) -> Config:
@@ -55,6 +65,37 @@ def load_config(config_path: str) -> Config:
         data['steps_per_conversation'] = data['steps']
 
     return Config(**data)
+
+
+def validate_config(cfg: Config) -> None:
+    """Validate config values and mode choices."""
+    if cfg.dynamics_mode not in {"dynamic", "fixed_binary"}:
+        raise ValueError(
+            f"Invalid dynamics_mode: {cfg.dynamics_mode}. "
+            "Expected one of: dynamic, fixed_binary"
+        )
+    if not 0.0 <= cfg.fixed_d_vulnerable <= 1.0:
+        raise ValueError(
+            f"fixed_d_vulnerable must be in [0, 1], got {cfg.fixed_d_vulnerable}"
+        )
+    if not 0.0 <= cfg.fixed_d_not_vulnerable <= 1.0:
+        raise ValueError(
+            f"fixed_d_not_vulnerable must be in [0, 1], got {cfg.fixed_d_not_vulnerable}"
+        )
+    if not 0.0 <= cfg.assistant_temperature <= 2.0:
+        raise ValueError(
+            f"assistant_temperature must be in [0, 2], got {cfg.assistant_temperature}"
+        )
+    if not 0.0 <= cfg.user_temperature <= 2.0:
+        raise ValueError(
+            f"user_temperature must be in [0, 2], got {cfg.user_temperature}"
+        )
+    if cfg.summary_update_history_k < 0:
+        raise ValueError(
+            f"summary_update_history_k must be >= 0, got {cfg.summary_update_history_k}"
+        )
+    if not cfg.enablement_eval_version.strip():
+        raise ValueError("enablement_eval_version must be non-empty")
 
 
 def generate_backstory(rng, scenario: str) -> str:
@@ -85,6 +126,33 @@ Discussion style: {engagement_style}"""
         return ""
 
 
+def initialize_user_state(cfg: Config, episode_id: int, rng) -> Tuple[float, str]:
+    """
+    Initialize user state for an episode.
+
+    Returns:
+        Tuple of (initial_D, user_type)
+    """
+    if cfg.dynamics_mode == "fixed_binary":
+        if episode_id % 2 == 0:
+            return cfg.fixed_d_vulnerable, "vulnerable"
+        return cfg.fixed_d_not_vulnerable, "not_vulnerable"
+
+    return rng.uniform(0, 1), "dynamic"
+
+
+def should_reset_none_feedback(cfg: Config, conversation_id: int, step: int) -> bool:
+    """
+    Whether to suppress cross-conversation feedback leakage in none mode.
+    """
+    return (
+        cfg.memory_mode == "none"
+        and cfg.none_reset_feedback_at_conversation_start
+        and conversation_id > 0
+        and step == 0
+    )
+
+
 async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str, Any]]:
     """
     Run a single episode (user) with multiple conversations asynchronously.
@@ -98,13 +166,16 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
         List of log dicts, one per step across all conversations
     """
     # Initialize user state
-    D = rng.uniform(0, 1)  # initial desperation
+    D, user_type = initialize_user_state(cfg, episode_id, rng)
     D_0 = D
     backstory = generate_backstory(rng, cfg.scenario)  # Generate backstory for this user
     memory = MemoryManager(cfg)  # handles full/summary/none - persists across conversations
     all_logs = []
 
-    print(f"Episode {episode_id}: D_0 = {D_0:.3f}, mode = {cfg.memory_mode}, scenario = {cfg.scenario}")
+    print(
+        f"Episode {episode_id}: D_0 = {D_0:.3f}, user_type = {user_type}, "
+        f"mode = {cfg.memory_mode}, scenario = {cfg.scenario}, dynamics = {cfg.dynamics_mode}"
+    )
 
     # Loop through conversations
     for conversation_id in range(cfg.conversations_per_user):
@@ -130,8 +201,12 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                     else:
                         # Neutral check-in opener — state-independent so D doesn't leak
                         current_user_msg = _generate_continuation_message(cfg.scenario)
-                        approval_last = all_logs[-1]["approval_score"]
-                        approval_reason_last = all_logs[-1].get("approval_reason", "")
+                        if should_reset_none_feedback(cfg, conversation_id, step):
+                            approval_last = None
+                            approval_reason_last = ""
+                        else:
+                            approval_last = all_logs[-1]["approval_score"]
+                            approval_reason_last = all_logs[-1].get("approval_reason", "")
                 else:
                     # Continuing within same conversation
                     current_user_msg = all_logs[-1]["user_msg"]
@@ -145,7 +220,12 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                 # For step 0 of continuation conversations, seed user LLM with last exchange
                 # from the prior conversation so it can continue naturally rather than cold-starting.
                 user_history = history
-                if conversation_id > 0 and step == 0 and all_logs:
+                if (
+                    conversation_id > 0
+                    and step == 0
+                    and all_logs
+                    and not should_reset_none_feedback(cfg, conversation_id, step)
+                ):
                     prior = all_logs[-1]
                     user_history = [("assistant", prior["assistant_text"]), ("user", prior["user_msg"])]
                 u = await user_turn_async(cfg, D, user_history, a_text, backstory)
@@ -156,8 +236,12 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                 user_msg = u["user_message"]
 
                 # 4) Update D based on enablement_score (assistant's behavior drives D dynamics)
-                noise = rng.normal(0, cfg.noise_sigma)
-                D = clip(D + cfg.alpha * (enablement_score / 10.0) - cfg.beta + noise, 0, 1)
+                if cfg.dynamics_mode == "dynamic":
+                    noise = rng.normal(0, cfg.noise_sigma)
+                    D = clip(D + cfg.alpha * (enablement_score / 10.0) - cfg.beta + noise, 0, 1)
+                else:
+                    # Fixed user-type mode: D does not evolve over time.
+                    D = D_0
 
                 # 5) Update memory (persists across conversations!)
                 await memory.update_async(cfg, history, a_text, user_msg, approval_score, approval_reason)
@@ -174,6 +258,7 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                     "conversation": conversation_id,
                     "t": step,
                     "total_step": total_step,
+                    "D_0": D_0,
                     "D": D,
                     "approval_score": approval_score,
                     "enablement_score": enablement_score,
@@ -183,6 +268,9 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                     "approval_reason": approval_reason,
                     "memory_mode": cfg.memory_mode,
                     "memory_snapshot": memory.snapshot(),
+                    "user_type": user_type,
+                    "dynamics_mode": cfg.dynamics_mode,
+                    "enablement_eval_version": cfg.enablement_eval_version,
                     "scenario": cfg.scenario,
                     "backstory": backstory
                 })
@@ -251,6 +339,8 @@ async def run_experiment_async(cfg: Config) -> None:
     print(f"Total steps per user: {total_steps}")
     print(f"Max concurrent: {cfg.max_concurrent}")
     print(f"Seed: {cfg.seed}")
+    print(f"Dynamics mode: {cfg.dynamics_mode}")
+    print(f"Enablement eval version: {cfg.enablement_eval_version}")
     print(f"Logging to: {log_file}")
     print(f"{'='*70}\n")
 
@@ -301,6 +391,8 @@ def main():
                        help="Override scenario (therapy, politics)")
     parser.add_argument("--memory_mode", type=str, default=None,
                        help="Override memory mode (full_context, summary, none)")
+    parser.add_argument("--seed", type=int, default=None,
+                       help="Override random seed")
     parser.add_argument("--episodes", type=int, default=None,
                        help="Override number of episodes (users)")
     parser.add_argument("--conversations", type=int, default=None,
@@ -309,6 +401,29 @@ def main():
                        help="Override steps per conversation")
     parser.add_argument("--max_concurrent", type=int, default=None,
                        help="Override max concurrent episodes")
+    parser.add_argument("--enablement_eval_version", type=str, default=None,
+                       help="Version label for enablement evaluator in logs")
+    parser.add_argument("--assistant_temperature", type=float, default=None,
+                       help="Override assistant sampling temperature")
+    parser.add_argument("--user_temperature", type=float, default=None,
+                       help="Override simulated-user sampling temperature")
+    parser.add_argument("--summary_update_history_k", type=int, default=None,
+                       help="Include last k exchanges in summary-memory updater context")
+    parser.add_argument(
+        "--none_reset_feedback_at_conversation_start",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "When true, none mode will not receive last-turn approval feedback or "
+            "cross-conversation user-history seeding at new conversation starts"
+        ),
+    )
+    parser.add_argument("--dynamics_mode", type=str, default=None,
+                       help="Override D dynamics mode (dynamic, fixed_binary)")
+    parser.add_argument("--fixed_d_vulnerable", type=float, default=None,
+                       help="Override fixed D for vulnerable users in fixed_binary mode")
+    parser.add_argument("--fixed_d_not_vulnerable", type=float, default=None,
+                       help="Override fixed D for not-vulnerable users in fixed_binary mode")
 
     args = parser.parse_args()
 
@@ -320,6 +435,8 @@ def main():
         cfg.scenario = args.scenario
     if args.memory_mode is not None:
         cfg.memory_mode = args.memory_mode
+    if args.seed is not None:
+        cfg.seed = args.seed
     if args.episodes is not None:
         cfg.episodes = args.episodes
     if args.conversations is not None:
@@ -328,6 +445,24 @@ def main():
         cfg.steps_per_conversation = args.steps
     if args.max_concurrent is not None:
         cfg.max_concurrent = args.max_concurrent
+    if args.enablement_eval_version is not None:
+        cfg.enablement_eval_version = args.enablement_eval_version
+    if args.assistant_temperature is not None:
+        cfg.assistant_temperature = args.assistant_temperature
+    if args.user_temperature is not None:
+        cfg.user_temperature = args.user_temperature
+    if args.summary_update_history_k is not None:
+        cfg.summary_update_history_k = args.summary_update_history_k
+    if args.none_reset_feedback_at_conversation_start is not None:
+        cfg.none_reset_feedback_at_conversation_start = args.none_reset_feedback_at_conversation_start
+    if args.dynamics_mode is not None:
+        cfg.dynamics_mode = args.dynamics_mode
+    if args.fixed_d_vulnerable is not None:
+        cfg.fixed_d_vulnerable = args.fixed_d_vulnerable
+    if args.fixed_d_not_vulnerable is not None:
+        cfg.fixed_d_not_vulnerable = args.fixed_d_not_vulnerable
+
+    validate_config(cfg)
 
     # Run experiment
     run_experiment(cfg)

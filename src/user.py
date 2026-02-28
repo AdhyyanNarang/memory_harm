@@ -55,7 +55,7 @@ def user_turn(
         system_prompt=prompts["USER_SYSTEM"].format(backstory=backstory) if cfg.scenario == "politics" else prompts["USER_SYSTEM"],
         user_prompt=user_prompt,
         model=cfg.user_model,
-        temperature=0.7,
+        temperature=cfg.user_temperature,
         json_mode=True,
     )
 
@@ -126,7 +126,7 @@ async def user_turn_async(
         system_prompt=prompts["USER_SYSTEM"].format(backstory=backstory) if cfg.scenario == "politics" else prompts["USER_SYSTEM"],
         user_prompt=user_prompt,
         model=cfg.user_model,
-        temperature=0.7,
+        temperature=cfg.user_temperature,
         json_mode=True,
     )
 
