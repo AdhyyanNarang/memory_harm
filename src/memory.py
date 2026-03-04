@@ -21,6 +21,8 @@ class MemoryManager:
         # Initial summary for summary mode (scenario-specific)
         if cfg.scenario == "politics":
             self.summary = "- User appreciates engagement with their political views\n- Be conversational\n- Stay on topic\n"
+        elif cfg.scenario == "avoidance":
+            self.summary = "- User appreciates understanding of their anxiety\n- Be supportive\n- Acknowledge their feelings\n"
         else:
             self.summary = "- User appreciates empathy\n- Be concise\n- Avoid specifics\n"
 
@@ -189,7 +191,7 @@ class MemoryManager:
         prompts = get_prompts(self.cfg.scenario)
 
         last_approval_str = fmt_approval(approval_last)
-        reason_str = approval_reason if approval_reason else "N/A (first turn)"
+        reason_str = approval_reason if approval_reason else "N/A"
 
         if self.mode == "full_context":
             history_text = render_history(history, budget=self.cfg.token_budget)
