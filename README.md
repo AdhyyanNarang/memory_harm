@@ -1,3 +1,11 @@
+# Fork details
+
+This is the copy of the original 'memory_harm' repo. This copy has modifications made by Laxman to run Google Colab Pro (A100 GPU). I think the code can also run on Colab Free version (just a different GPU ig). Follow the instructions on Run_Experiment_Laxman.ipynb notebook to run the code.
+
+
+
+
+
 # Memory-Driven Personalization Can Induce Harmful Drift
 
 LLM-vs-LLM simulation demonstrating how memory-based personalization at inference time can create self-reinforcing harmful feedback loops.

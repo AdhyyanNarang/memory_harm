@@ -2,11 +2,11 @@
 
 # Experiment parameters
 seed: 1
-scenario: "politics" # options: "therapy" | "politics"
+scenario: "therapy" # options: "therapy" | "politics"
 episodes: 500 # number of users
 conversations_per_user: 5 # number of conversations per user
 steps_per_conversation: 6 # steps per conversation (total steps = 5 * 6 = 30)
-memory_mode: "summary" # options: "full_context" | "summary" | "none"
+memory_mode: "none" # options: "full_context" | "summary" | "none"
 token_budget: 6000
 
 # Async execution
@@ -18,8 +18,8 @@ beta: 0.072 # baseline decay offset — gives D* = beta/alpha = 0.6 under approv
 noise_sigma: 0.01
 
 # Models
-assistant_model: "gpt-4o-mini"
-user_model: "gpt-4o-mini"
+assistant_model: "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
+user_model: "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
 
 # Summary memory
 summary_bullets_max: 5
