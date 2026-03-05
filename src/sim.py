@@ -157,7 +157,8 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
 
                 # 4) Update D based on enablement_score (assistant's behavior drives D dynamics)
                 noise = rng.normal(0, cfg.noise_sigma)
-                D = clip(D + cfg.alpha * (enablement_score / 10.0) - cfg.beta + noise, 0, 1)
+                # D = clip(D + cfg.alpha * (enablement_score / 10.0) - cfg.beta + noise, 0, 1)
+                D = D_0
 
                 # 5) Update memory (persists across conversations!)
                 await memory.update_async(cfg, history, a_text, user_msg, approval_score, approval_reason)
