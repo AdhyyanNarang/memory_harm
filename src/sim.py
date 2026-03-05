@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
@@ -42,6 +43,28 @@ class Config:
 
     # Backward compatibility
     steps: Optional[int] = None
+
+
+def _is_colab_runtime() -> bool:
+    """Detect whether code is running in Google Colab."""
+    return "google.colab" in sys.modules or bool(os.environ.get("COLAB_RELEASE_TAG"))
+
+
+def _setup_colab_drive_logs(cfg: Config, drive_root: str) -> None:
+    """Mount Google Drive in Colab and redirect log_dir to Drive."""
+    if not _is_colab_runtime():
+        return
+
+    try:
+        from google.colab import drive  # type: ignore
+    except ImportError:
+        return
+
+    mount_point = Path("/content/drive")
+    if not Path(drive_root).exists():
+        drive.mount(str(mount_point))
+
+    cfg.log_dir = str(Path(drive_root) / "memory_harm_Shin-u" / "data" / "logs")
 
 
 def load_config(config_path: str) -> Config:
@@ -310,6 +333,12 @@ def main():
                        help="Override steps per conversation")
     parser.add_argument("--max_concurrent", type=int, default=None,
                        help="Override max concurrent episodes")
+    parser.add_argument("--log_dir", type=str, default=None,
+                       help="Override log directory")
+    parser.add_argument("--use_colab_drive", action="store_true",
+                       help="In Colab, mount Google Drive and save logs there")
+    parser.add_argument("--drive_root", type=str, default="/content/drive/MyDrive",
+                       help="Google Drive root path used with --use_colab_drive")
 
     args = parser.parse_args()
 
@@ -329,6 +358,10 @@ def main():
         cfg.steps_per_conversation = args.steps
     if args.max_concurrent is not None:
         cfg.max_concurrent = args.max_concurrent
+    if args.log_dir is not None:
+        cfg.log_dir = args.log_dir
+    if args.use_colab_drive:
+        _setup_colab_drive_logs(cfg, args.drive_root)
 
     # Run experiment
     run_experiment(cfg)

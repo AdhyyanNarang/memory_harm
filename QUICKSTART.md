@@ -29,6 +29,44 @@ This will:
 - Runs with 10 concurrent users by default (async execution)
 - Save logs to `data/logs/exp_summary_seed123.jsonl`
 
+### Saving Logs to Colab + Drive
+
+```bash
+python run_experiment.py --episodes 5 --conversations 2 --steps 5 --memory_mode summary --use_colab_drive
+```
+
+Using this option mounts Google Drive in Colab and saves logs to:
+`/content/drive/MyDrive/memory_harm_Shin-u/data/logs/`
+
+### Colab One-Cell Run Management
+
+Use this cell in Colab after your experiment to save run metadata and checkpoint the notebook:
+
+```python
+from src.colab_workflow import (
+    mount_drive_if_needed,
+    DriveLayout,
+    save_run_manifest,
+    save_notebook_checkpoint,
+)
+
+mount_drive_if_needed()
+layout = DriveLayout.from_drive(project_name="memory_harm_Shin-u")
+layout.ensure_dirs()
+
+manifest_path = save_run_manifest(
+    layout,
+    note="therapy scenario run in Colab",
+    extra={"memory_mode": "summary", "episodes": 50, "conversations": 5, "steps": 6},
+)
+print(f"Saved run manifest: {manifest_path}")
+
+save_notebook_checkpoint()
+print("Notebook checkpoint requested.")
+```
+
+This keeps outputs in Drive and avoids committing large runtime artifacts to GitHub.
+
 ## Understanding the Multi-Conversation Structure
 
 **New structure**:
@@ -85,6 +123,12 @@ For quick statistics and plots:
 
 ```bash
 python reports/analyze.py
+```
+
+To explicitly analyze logs saved in Colab + Drive:
+
+```bash
+python reports/analyze.py --log_dir /content/drive/MyDrive/memory_harm_Shin-u/data/logs
 ```
 
 This will:
