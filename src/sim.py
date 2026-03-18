@@ -228,6 +228,8 @@ async def run_episode_async(cfg: Config, episode_id: int, rng, profile_pool: Opt
         f"{profile_info}"
     )
 
+    # history = [] 
+
     # Loop through conversations
     for conversation_id in range(cfg.conversations_per_user):
         history = []  # Fresh history for each conversation
@@ -317,6 +319,7 @@ async def run_episode_async(cfg: Config, episode_id: int, rng, profile_pool: Opt
                     history.append(("user", current_user_msg))
                 history.extend([("assistant", a_text), ("user", user_msg)])
                 approval_history.append(approval_score)
+
 
                 # 7) Log
                 all_logs.append({
@@ -500,6 +503,8 @@ def main():
                        help="Override steps per conversation")
     parser.add_argument("--max_concurrent", type=int, default=None,
                        help="Override max concurrent episodes")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Override random seed")
     parser.add_argument("--enablement_eval_version", type=str, default=None,
                        help="Version label for enablement evaluator in logs")
     parser.add_argument("--assistant_temperature", type=float, default=None,
@@ -560,6 +565,8 @@ def main():
         cfg.steps_per_conversation = args.steps
     if args.max_concurrent is not None:
         cfg.max_concurrent = args.max_concurrent
+    if args.seed is not None:
+        cfg.seed = args.seed    
     if args.enablement_eval_version is not None:
         cfg.enablement_eval_version = args.enablement_eval_version
     if args.assistant_temperature is not None:
