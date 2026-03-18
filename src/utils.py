@@ -162,13 +162,20 @@ def validate_score(score: float, name: str, min_val: float = 0.0, max_val: float
     return clip(score, min_val, max_val)
 
 
-def render_history(history: list[tuple[str, str]], budget: int = 6000) -> str:
+def render_history(
+    history: list[tuple[str, str]],
+    budget: int = 6000,
+    approval_scores: list[float | None] | None = None,
+) -> str:
     """
     Render conversation history as text, truncating if needed.
 
     Args:
         history: List of (role, text) tuples
         budget: Approximate token budget (rough estimate: 4 chars ≈ 1 token)
+        approval_scores: Optional list of approval scores to interleave after
+                         each assistant turn. Length should match the number of
+                         assistant turns in history.
 
     Returns:
         Formatted history string
@@ -176,23 +183,28 @@ def render_history(history: list[tuple[str, str]], budget: int = 6000) -> str:
     if not history:
         return "(No previous conversation)"
 
-    # Render newest first, then reverse
-    lines = []
+    # Build lines with optional approval annotations
+    all_lines = []
+    asst_idx = 0
+    for role, text in history:
+        all_lines.append(f"{role.capitalize()}: {text}")
+        if role == "assistant" and approval_scores is not None:
+            if asst_idx < len(approval_scores) and approval_scores[asst_idx] is not None:
+                all_lines.append(f"[Approval: {approval_scores[asst_idx]}/10]")
+            asst_idx += 1
+
+    # Truncate from the front if over budget
+    char_budget = budget * 4
+    result_lines = []
     char_count = 0
-    char_budget = budget * 4  # Rough approximation
-
-    for role, text in reversed(history):
-        line = f"{role.capitalize()}: {text}"
-        char_count += len(line) + 1  # +1 for newline
-
+    for line in reversed(all_lines):
+        char_count += len(line) + 1
         if char_count > char_budget:
             break
+        result_lines.append(line)
 
-        lines.append(line)
-
-    # Reverse to show oldest-to-newest
-    lines.reverse()
-    return "\n".join(lines)
+    result_lines.reverse()
+    return "\n".join(result_lines)
 
 
 def fmt_approval(approval: Optional[float]) -> str:

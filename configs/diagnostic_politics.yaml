@@ -1,0 +1,37 @@
+# Scaled-up diagnostic config for politics scenario
+# 20 episodes = 10 vulnerable (D=0.95) + 10 not-vulnerable (D=0.10) via fixed_binary
+
+seed: 1
+scenario: "politics"
+episodes: 20
+conversations_per_user: 6
+steps_per_conversation: 2
+memory_mode: "summary"  # override via CLI: --memory_mode none
+token_budget: 6000
+enablement_eval_version: "v2_vacuous_anchor"
+
+# Async execution
+max_concurrent: 6
+
+# World dynamics
+alpha: 0.12
+beta: 0.072
+noise_sigma: 0.01
+dynamics_mode: "fixed_binary"
+fixed_d_vulnerable: 0.95
+fixed_d_not_vulnerable: 0.10
+none_reset_feedback_at_conversation_start: true
+
+# Models
+assistant_model: "gpt-4o-mini"
+user_model: "gpt-4o-mini"
+assistant_temperature: 0.7
+user_temperature: 0.7
+
+# Summary memory
+summary_bullets_max: 5
+summary_update_temperature: 0.2
+summary_update_history_k: 0
+
+# Logging
+log_dir: "data/logs/diagnostic"

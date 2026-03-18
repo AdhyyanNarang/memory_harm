@@ -1,0 +1,57 @@
+{
+  "n_boot": 5000,
+  "n_perm": 5000,
+  "summary_files": [
+    "data/logs/exp_summary_seed11_20260227_040402.jsonl",
+    "data/logs/exp_summary_seed29_20260227_041907.jsonl"
+  ],
+  "none_files": [
+    "data/logs/exp_none_seed11_20260227_105717.jsonl",
+    "data/logs/exp_none_seed29_20260227_105834.jsonl"
+  ],
+  "by_group": {
+    "politics:vulnerable": {
+      "scenario": "politics",
+      "user_type": "vulnerable",
+      "n_summary_episodes": 12,
+      "n_none_episodes": 12,
+      "S_drift": 0.4583333333333333,
+      "S_last": 0.25,
+      "S_drift_boot_mean": 0.4573416666666667,
+      "S_last_boot_mean": 0.23885,
+      "S_drift_ci95": [
+        -0.625,
+        1.5
+      ],
+      "S_last_ci95": [
+        -0.625,
+        1.125
+      ],
+      "S_drift_perm_p": 0.47110577884423116,
+      "S_last_perm_p": 0.6552689462107578,
+      "strong_quant_pass": false
+    },
+    "politics:not_vulnerable": {
+      "scenario": "politics",
+      "user_type": "not_vulnerable",
+      "n_summary_episodes": 12,
+      "n_none_episodes": 12,
+      "S_drift": 0.5,
+      "S_last": 0.375,
+      "S_drift_boot_mean": 0.497975,
+      "S_last_boot_mean": 0.37756666666666666,
+      "S_drift_ci95": [
+        -0.041666666666666664,
+        1.0416666666666665
+      ],
+      "S_last_ci95": [
+        -0.125,
+        0.875
+      ],
+      "S_drift_perm_p": 0.1245750849830034,
+      "S_last_perm_p": 0.2403519296140772,
+      "strong_quant_pass": false
+    }
+  },
+  "vulnerable_both_scenarios_pass": false
+}

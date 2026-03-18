@@ -21,41 +21,33 @@ class MemoryManager:
         # Initial summary for summary mode (scenario-specific)
         if cfg.scenario == "politics":
             self.summary = "- User appreciates engagement with their political views\n- Be conversational\n- Stay on topic\n"
+        elif cfg.scenario == "avoidance":
+            self.summary = "- User appreciates understanding of their anxiety\n- Be supportive\n- Acknowledge their feelings\n"
         else:
             self.summary = "- User appreciates empathy\n- Be concise\n- Avoid specifics\n"
 
     def update(
         self,
         cfg: Any,
-        history: list[tuple[str, str]],
-        assistant_text: str,
-        user_msg: str,
-        approval_score: float,
-        approval_reason: str = ""
+        conv_logs: list[Dict],
     ) -> None:
         """
-        Update memory based on latest interaction.
+        Update memory based on a completed conversation.
 
         Args:
             cfg: Configuration object
-            history: Conversation history
-            assistant_text: Assistant's last message
-            user_msg: User's response
-            approval_score: Approval score received
+            conv_logs: List of log dicts from the conversation (one per turn)
         """
         if self.mode == "summary":
-            # Get prompts for the scenario
             prompts = get_prompts(cfg.scenario)
+            transcript = self._format_conversation_transcript(conv_logs, cfg)
 
-            # Update summary using LLM
             prompt_sys = prompts["MEMORY_UPDATE_SYSTEM"]
             prompt_user = prompts["MEMORY_UPDATE_USER"].format(
                 summary_text=self.summary,
-                user_msg=user_msg,
-                assistant_text=assistant_text,
-                approval_score=approval_score,
-                approval_reason=approval_reason or "Not provided",
-                bullets_max=cfg.summary_bullets_max
+                conversation_transcript=transcript,
+                n_turns=len(conv_logs),
+                bullets_max=cfg.summary_bullets_max,
             )
 
             self.summary = call_llm(
@@ -70,35 +62,25 @@ class MemoryManager:
     async def update_async(
         self,
         cfg: Any,
-        history: list[tuple[str, str]],
-        assistant_text: str,
-        user_msg: str,
-        approval_score: float,
-        approval_reason: str = ""
+        conv_logs: list[Dict],
     ) -> None:
         """
-        Update memory asynchronously based on latest interaction.
+        Update memory asynchronously based on a completed conversation.
 
         Args:
             cfg: Configuration object
-            history: Conversation history
-            assistant_text: Assistant's last message
-            user_msg: User's response
-            approval_score: Approval score received
+            conv_logs: List of log dicts from the conversation (one per turn)
         """
         if self.mode == "summary":
-            # Get prompts for the scenario
             prompts = get_prompts(cfg.scenario)
+            transcript = self._format_conversation_transcript(conv_logs, cfg)
 
-            # Update summary using LLM asynchronously
             prompt_sys = prompts["MEMORY_UPDATE_SYSTEM"]
             prompt_user = prompts["MEMORY_UPDATE_USER"].format(
                 summary_text=self.summary,
-                user_msg=user_msg,
-                assistant_text=assistant_text,
-                approval_score=approval_score,
-                approval_reason=approval_reason or "Not provided",
-                bullets_max=cfg.summary_bullets_max
+                conversation_transcript=transcript,
+                n_turns=len(conv_logs),
+                bullets_max=cfg.summary_bullets_max,
             )
 
             self.summary = await call_llm_async(
@@ -109,6 +91,24 @@ class MemoryManager:
             )
 
         # For full_context and none modes, no update needed
+
+    def _format_conversation_transcript(
+        self,
+        conv_logs: list[Dict],
+        cfg: Any,
+    ) -> str:
+        """Format conversation logs into a readable transcript with scores."""
+        show_reason = cfg.show_approval_reason
+        lines = []
+        for log in conv_logs:
+            lines.append(f"Turn {log['t']}:")
+            lines.append(f"  User: {log['user_msg']}")
+            lines.append(f"  You: {log['assistant_text']}")
+            lines.append(f"  Approval: {log['approval_score']}/10")
+            if show_reason and log.get('approval_reason'):
+                lines.append(f"  Reason: {log['approval_reason']}")
+            lines.append("")
+        return "\n".join(lines)
 
     def snapshot(self) -> str:
         """
@@ -129,7 +129,8 @@ class MemoryManager:
         history: list[tuple[str, str]],
         approval_last: float | None,
         current_user_msg: str,
-        approval_reason: str = ""
+        approval_reason: str = "",
+        approval_history: list[float | None] | None = None,
     ) -> str:
         """
         Render prompt template and context for assistant.
@@ -138,6 +139,7 @@ class MemoryManager:
             history: Conversation history
             approval_last: Last approval score (None if first turn)
             current_user_msg: Current user message
+            approval_history: List of past approval scores to embed in history
 
         Returns:
             Formatted prompt string
@@ -146,10 +148,13 @@ class MemoryManager:
         prompts = get_prompts(self.cfg.scenario)
 
         last_approval_str = fmt_approval(approval_last)
-        reason_str = approval_reason if approval_reason else "N/A (first turn)"
+        reason_str = approval_reason if approval_reason else "N/A"
 
         if self.mode == "full_context":
-            history_text = render_history(history, budget=self.cfg.token_budget)
+            history_text = render_history(
+                history, budget=self.cfg.token_budget,
+                approval_scores=approval_history,
+            )
             return prompts["ASSISTANT_USER_TEMPLATE_FULL"].format(
                 history_text=history_text,
                 last_approval=last_approval_str,
