@@ -1,8 +1,12 @@
 """Simulated user LLM that generates user messages and (optionally) evaluates assistant responses."""
 
-from typing import Dict, Any
+import asyncio
+from typing import Dict, Any, Optional, TYPE_CHECKING
 from .prompts import get_prompts
 from .utils import call_llm, call_llm_async, parse_json_response, validate_score, render_history
+
+if TYPE_CHECKING:
+    from .profiles import CharacterProfile
 
 
 async def user_message_async(
@@ -81,12 +85,86 @@ async def evaluate_enablement_async(
     return data
 
 
+async def user_message_profile_async(
+    cfg: Any,
+    profile: "CharacterProfile",
+    history: list[tuple[str, str]],
+    assistant_text: str,
+) -> str:
+    """Generate user message from a character profile (no D parameter)."""
+    from .profiles import get_char_prompt, get_char_suffix
+
+    prompts = get_prompts(cfg.scenario)
+    history_text = render_history(history, budget=cfg.token_budget) if history else "(Beginning of conversation)"
+
+    system_prompt = prompts["USER_SYSTEM_PROFILE"].format(
+        user_context=profile.raw_content,
+        char_prompt=get_char_prompt(profile),
+        char_suffix=get_char_suffix(profile),
+    )
+    user_prompt = prompts["USER_INPUT_PROFILE"].format(
+        history_text=history_text,
+        assistant_text=assistant_text,
+    )
+
+    response = await call_llm_async(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model=cfg.user_model,
+        temperature=cfg.user_temperature,
+        json_mode=True,
+    )
+
+    data = parse_json_response(response, ["user_message"])
+    return data["user_message"]
+
+
+async def preference_model_async(
+    cfg: Any,
+    profile: "CharacterProfile",
+    history: list[tuple[str, str]],
+    assistant_text: str,
+) -> Dict[str, Any]:
+    """Compute approval score via the paper's preference model.
+
+    Returns dict with 'approval_score' (1-10) and 'approval_reason'.
+    """
+    from .profiles import get_pm_prompt
+
+    prompts = get_prompts(cfg.scenario)
+    history_text = render_history(history, budget=cfg.token_budget) if history else "(Beginning of conversation)"
+
+    pm_prompt = get_pm_prompt(profile)
+
+    system_prompt = prompts["PREFERENCE_MODEL_SYSTEM"].format(
+        pm_prompt=pm_prompt,
+    )
+    user_prompt = prompts["PREFERENCE_MODEL_INPUT"].format(
+        history_text=history_text,
+        assistant_text=assistant_text,
+    )
+
+    response = await call_llm_async(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        model=cfg.user_model,
+        temperature=cfg.user_temperature,
+        json_mode=True,
+    )
+
+    data = parse_json_response(response, ["approval_score"])
+    data["approval_score"] = validate_score(data["approval_score"], "approval_score", 1.0, 10.0)
+    data.setdefault("approval_reason", "")
+    return data
+
+
 async def user_turn_async(
     cfg: Any,
     D: float,
     history: list[tuple[str, str]],
     assistant_text: str,
-    backstory: str = ""
+    backstory: str = "",
+    profile: Optional["CharacterProfile"] = None,
 ) -> Dict[str, Any]:
     """
     Simulate a user turn asynchronously.
@@ -102,8 +180,50 @@ async def user_turn_async(
         Dictionary with user_message, enablement_score, indulgence_score, approval_score, approval_reason
     """
     use_separate = getattr(cfg, "use_separate_evaluator", False)
+    use_profiles = getattr(cfg, "user_mode", "d_parametric") == "character_profile" and profile is not None
 
-    if use_separate:
+    if use_profiles:
+        # --- Character profile mode ---
+
+        # 1) Generate user message + preference model approval concurrently
+        eval_user_msg = history[-1][1] if history and history[-1][0] == "user" else ""
+
+        profile_approval_mode = getattr(cfg, "profile_approval_mode", "preference_model")
+        if profile_approval_mode == "preference_model":
+            user_msg, pm_result = await asyncio.gather(
+                user_message_profile_async(cfg, profile, history, assistant_text),
+                preference_model_async(cfg, profile, history, assistant_text),
+            )
+            approval_score = pm_result["approval_score"]
+            approval_reason = pm_result.get("approval_reason", "")
+        else:
+            # d_based: generate user message, compute approval from enablement later
+            user_msg = await user_message_profile_async(cfg, profile, history, assistant_text)
+            approval_score = None  # computed below after enablement eval
+            approval_reason = ""
+
+        # 2) Evaluate enablement (cold evaluator — unchanged)
+        if not eval_user_msg:
+            eval_user_msg = user_msg
+        eval_result = await evaluate_enablement_async(cfg, eval_user_msg, assistant_text)
+
+        # 3) If d_based approval, compute from enablement + D_equiv
+        if approval_score is None:
+            score_diff = abs(eval_result["enablement_score"] - 10 * D)
+            approval_score = 10 * (1 - score_diff / 10)
+            approval_reason = eval_result.get("approval_reason", "")
+
+        data = {
+            "user_message": user_msg,
+            "enablement_score": eval_result["enablement_score"],
+            "approval_reason": approval_reason,
+            "enablement_category": eval_result.get("enablement_category", ""),
+            "indulgence_score": 10 * D,
+            "approval_score": approval_score,
+        }
+        return data
+
+    elif use_separate:
         # --- Split mode: two separate calls ---
 
         # 1) Generate user message (persona-primed, D-aware)

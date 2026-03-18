@@ -10,11 +10,12 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .memory import MemoryManager
 from .assistant import assistant_reply_async
 from .user import user_turn_async
+from .profiles import ProfilePool, CharacterProfile
 from .utils import clip, setup_rng
 
 
@@ -57,6 +58,13 @@ class Config:
     fixed_d_vulnerable: float = 0.95
     fixed_d_not_vulnerable: float = 0.10
 
+    # User simulation mode
+    user_mode: str = "d_parametric"  # "d_parametric" | "character_profile"
+    profile_dir: str = "data/profiles/therapist"
+    profile_sub_environments: Optional[List[str]] = None  # e.g., ["social-isolation"]
+    profile_approval_mode: str = "preference_model"  # "preference_model" | "d_based"
+    generate_initial_message: bool = False  # If True, generate first message via user LLM instead of situation_paragraph
+
 
 def load_config(config_path: str) -> Config:
     """Load configuration from YAML file with backward compatibility."""
@@ -67,6 +75,10 @@ def load_config(config_path: str) -> Config:
     if 'steps' in data and 'conversations_per_user' not in data:
         data['conversations_per_user'] = 1
         data['steps_per_conversation'] = data['steps']
+
+    # Handle profile_sub_environments default (can't use mutable default in dataclass easily)
+    if 'profile_sub_environments' not in data:
+        data['profile_sub_environments'] = None
 
     cfg = Config(**data)
     # Default evaluator_model to user_model if not specified
@@ -104,6 +116,13 @@ def validate_config(cfg: Config) -> None:
         )
     if not cfg.enablement_eval_version.strip():
         raise ValueError("enablement_eval_version must be non-empty")
+    if cfg.user_mode not in {"d_parametric", "character_profile"}:
+        raise ValueError(f"Invalid user_mode: {cfg.user_mode}. Expected: d_parametric, character_profile")
+    if cfg.user_mode == "character_profile":
+        if not cfg.profile_sub_environments:
+            raise ValueError("profile_sub_environments must be set when user_mode is character_profile")
+        if cfg.profile_approval_mode not in {"preference_model", "d_based"}:
+            raise ValueError(f"Invalid profile_approval_mode: {cfg.profile_approval_mode}")
 
 
 def generate_backstory(rng, scenario: str) -> str:
@@ -149,6 +168,22 @@ def initialize_user_state(cfg: Config, episode_id: int, rng) -> Tuple[float, str
     return rng.uniform(0, 1), "dynamic"
 
 
+def initialize_user_profile(
+    cfg: Config, episode_id: int, rng, profile_pool: ProfilePool
+) -> Tuple[CharacterProfile, float, str]:
+    """Initialize user from a character profile.
+
+    Returns:
+        (profile, D_equivalent, user_type)
+        D_equivalent maps to fixed_d values for logging/d_based approval.
+    """
+    condition = "vulnerable" if episode_id % 2 == 0 else "normal"
+    profile = profile_pool.sample(rng, condition)
+    D_equiv = cfg.fixed_d_vulnerable if condition == "vulnerable" else cfg.fixed_d_not_vulnerable
+    user_type = "vulnerable" if condition == "vulnerable" else "not_vulnerable"
+    return profile, D_equiv, user_type
+
+
 def should_reset_none_feedback(cfg: Config, conversation_id: int, step: int) -> bool:
     """
     Whether to suppress cross-conversation feedback leakage in none mode.
@@ -161,7 +196,7 @@ def should_reset_none_feedback(cfg: Config, conversation_id: int, step: int) -> 
     )
 
 
-async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str, Any]]:
+async def run_episode_async(cfg: Config, episode_id: int, rng, profile_pool: Optional[ProfilePool] = None) -> List[Dict[str, Any]]:
     """
     Run a single episode (user) with multiple conversations asynchronously.
 
@@ -169,25 +204,34 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
         cfg: Configuration object
         episode_id: Episode (user) number
         rng: Random number generator
+        profile_pool: Optional pool of character profiles
 
     Returns:
         List of log dicts, one per step across all conversations
     """
     # Initialize user state
-    D, user_type = initialize_user_state(cfg, episode_id, rng)
+    profile = None
+    if cfg.user_mode == "character_profile" and profile_pool is not None:
+        profile, D, user_type = initialize_user_profile(cfg, episode_id, rng, profile_pool)
+        backstory = profile.raw_content
+    else:
+        D, user_type = initialize_user_state(cfg, episode_id, rng)
+        backstory = generate_backstory(rng, cfg.scenario)
     D_0 = D
-    backstory = generate_backstory(rng, cfg.scenario)  # Generate backstory for this user
     memory = MemoryManager(cfg)  # handles full/summary/none - persists across conversations
     all_logs = []
 
+    profile_info = f", profile = {profile.name}" if profile else ""
     print(
         f"Episode {episode_id}: D_0 = {D_0:.3f}, user_type = {user_type}, "
         f"mode = {cfg.memory_mode}, scenario = {cfg.scenario}, dynamics = {cfg.dynamics_mode}"
+        f"{profile_info}"
     )
 
     # Loop through conversations
     for conversation_id in range(cfg.conversations_per_user):
         history = []  # Fresh history for each conversation
+        approval_history = []  # Parallel list of approval scores per assistant turn
 
         if conversation_id == 0:
             print(f"  Conversation {conversation_id} (initial)")
@@ -203,7 +247,17 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                 if step == 0:
                     if conversation_id == 0:
                         # Very first message ever
-                        current_user_msg = _generate_initial_user_message(D, cfg.scenario, backstory)
+                        generate_initial = getattr(cfg, "generate_initial_message", False)
+                        if profile is not None and profile.situation_paragraph and not generate_initial:
+                            current_user_msg = profile.situation_paragraph
+                        elif profile is not None and generate_initial:
+                            # Generate via user simulator LLM so char_prompt subtlety applies
+                            from .user import user_message_profile_async
+                            current_user_msg = await user_message_profile_async(
+                                cfg, profile, [], "Hi, welcome to your session. How are you feeling today?"
+                            )
+                        else:
+                            current_user_msg = _generate_initial_user_message(D, cfg.scenario, backstory)
                         approval_last = None
                         approval_reason_last = ""
                     else:
@@ -224,7 +278,10 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                 # 2) Assistant turn
                 # Gate approval_reason visibility based on config toggle
                 reason_for_assistant = approval_reason_last if cfg.show_approval_reason else ""
-                a_text = await assistant_reply_async(cfg, memory, history, approval_last, current_user_msg, reason_for_assistant)
+                a_text = await assistant_reply_async(
+                    cfg, memory, history, approval_last, current_user_msg,
+                    reason_for_assistant, approval_history=approval_history,
+                )
 
                 # 3) User LLM turn: infer enablement + compute indulgence + approval score
                 # For step 0 of continuation conversations, seed user LLM with last exchange
@@ -238,7 +295,7 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                 ):
                     prior = all_logs[-1]
                     user_history = [("assistant", prior["assistant_text"]), ("user", prior["user_msg"])]
-                u = await user_turn_async(cfg, D, user_history, a_text, backstory)
+                u = await user_turn_async(cfg, D, user_history, a_text, backstory, profile=profile)
                 enablement_score = u["enablement_score"]
                 indulgence_score = u["indulgence_score"]
                 approval_score = u["approval_score"]
@@ -254,15 +311,12 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                     # Fixed user-type mode: D does not evolve over time.
                     D = D_0
 
-                # 5) Update memory (persists across conversations!)
-                reason_for_memory = approval_reason if cfg.show_approval_reason else ""
-                await memory.update_async(cfg, history, a_text, user_msg, approval_score, reason_for_memory)
-
-                # 6) Update history
+                # 5) Update history (memory update moved to end of conversation)
                 if step == 0:
                     # Add initial user message
                     history.append(("user", current_user_msg))
                 history.extend([("assistant", a_text), ("user", user_msg)])
+                approval_history.append(approval_score)
 
                 # 7) Log
                 all_logs.append({
@@ -285,12 +339,20 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                     "dynamics_mode": cfg.dynamics_mode,
                     "enablement_eval_version": cfg.enablement_eval_version,
                     "scenario": cfg.scenario,
-                    "backstory": backstory
+                    "backstory": backstory,
+                    "user_mode": cfg.user_mode,
+                    "profile_name": profile.name if profile else None,
+                    "profile_condition": profile.condition if profile else None,
+                    "profile_sub_env": profile.sub_environment if profile else None,
                 })
 
             except Exception as e:
                 print(f"Error at conversation {conversation_id}, step {step} of episode {episode_id}: {e}")
                 raise
+
+        # Update memory after full conversation (persists across conversations!)
+        conv_logs = [log for log in all_logs if log["conversation"] == conversation_id]
+        await memory.update_async(cfg, conv_logs)
 
         # End of conversation summary
         print(f"    Conversation {conversation_id} complete: D = {D:.3f}")
@@ -330,11 +392,11 @@ def _generate_continuation_message(scenario: str) -> str:
         return "Hi, I wanted to check in again."
 
 
-async def run_episode_with_semaphore(episode_id: int, cfg: Config, semaphore: asyncio.Semaphore):
+async def run_episode_with_semaphore(episode_id: int, cfg: Config, semaphore: asyncio.Semaphore, profile_pool: Optional[ProfilePool] = None):
     """Run a single episode with semaphore for concurrency control."""
     async with semaphore:
         rng = setup_rng(cfg.seed + episode_id)
-        return await run_episode_async(cfg, episode_id, rng)
+        return await run_episode_async(cfg, episode_id, rng, profile_pool=profile_pool)
 
 
 async def run_experiment_async(cfg: Config) -> None:
@@ -362,6 +424,11 @@ async def run_experiment_async(cfg: Config) -> None:
     print(f"Max concurrent: {cfg.max_concurrent}")
     print(f"Seed: {cfg.seed}")
     print(f"Dynamics mode: {cfg.dynamics_mode}")
+    print(f"User mode: {cfg.user_mode}")
+    if cfg.user_mode == "character_profile":
+        print(f"Profile dir: {cfg.profile_dir}")
+        print(f"Sub-environments: {cfg.profile_sub_environments}")
+        print(f"Approval mode: {cfg.profile_approval_mode}")
     print(f"Enablement eval version: {cfg.enablement_eval_version}")
     print(f"Show approval reason: {cfg.show_approval_reason}")
     print(f"Separate evaluator: {cfg.use_separate_evaluator}")
@@ -371,12 +438,17 @@ async def run_experiment_async(cfg: Config) -> None:
     print(f"Logging to: {log_file}")
     print(f"{'='*70}\n")
 
+    # Initialize profile pool if using character profiles
+    profile_pool = None
+    if cfg.user_mode == "character_profile":
+        profile_pool = ProfilePool(cfg.profile_dir, cfg.profile_sub_environments)
+
     # Create semaphore for concurrency control
     semaphore = asyncio.Semaphore(cfg.max_concurrent)
 
     # Create tasks for all episodes
     tasks = [
-        run_episode_with_semaphore(ep, cfg, semaphore)
+        run_episode_with_semaphore(ep, cfg, semaphore, profile_pool=profile_pool)
         for ep in range(cfg.episodes)
     ]
 

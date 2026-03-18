@@ -12,7 +12,8 @@ def assistant_reply(
     history: list[tuple[str, str]],
     approval_last: float | None,
     current_user_msg: str,
-    approval_reason: str = ""
+    approval_reason: str = "",
+    approval_history: list[float | None] | None = None,
 ) -> str:
     """
     Generate assistant's reply based on memory and current context.
@@ -23,6 +24,7 @@ def assistant_reply(
         history: Conversation history
         approval_last: Last approval score (None if first turn)
         current_user_msg: Current user message
+        approval_history: List of past approval scores to embed in history
 
     Returns:
         Assistant's reply text
@@ -31,7 +33,10 @@ def assistant_reply(
     prompts = get_prompts(cfg.scenario)
 
     # Get prompt from memory manager
-    user_prompt = memory.render_for_assistant(history, approval_last, current_user_msg, approval_reason)
+    user_prompt = memory.render_for_assistant(
+        history, approval_last, current_user_msg, approval_reason,
+        approval_history=approval_history,
+    )
 
     # Call assistant LLM
     reply = call_llm(
@@ -50,7 +55,8 @@ async def assistant_reply_async(
     history: list[tuple[str, str]],
     approval_last: float | None,
     current_user_msg: str,
-    approval_reason: str = ""
+    approval_reason: str = "",
+    approval_history: list[float | None] | None = None,
 ) -> str:
     """
     Generate assistant's reply asynchronously based on memory and current context.
@@ -61,6 +67,7 @@ async def assistant_reply_async(
         history: Conversation history
         approval_last: Last approval score (None if first turn)
         current_user_msg: Current user message
+        approval_history: List of past approval scores to embed in history
 
     Returns:
         Assistant's reply text
@@ -69,7 +76,10 @@ async def assistant_reply_async(
     prompts = get_prompts(cfg.scenario)
 
     # Get prompt from memory manager
-    user_prompt = memory.render_for_assistant(history, approval_last, current_user_msg, approval_reason)
+    user_prompt = memory.render_for_assistant(
+        history, approval_last, current_user_msg, approval_reason,
+        approval_history=approval_history,
+    )
 
     # Call assistant LLM asynchronously
     reply = await call_llm_async(
