@@ -106,9 +106,12 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
 
     print(f"Episode {episode_id}: D_0 = {D_0:.3f}, mode = {cfg.memory_mode}, scenario = {cfg.scenario}")
 
+    # history = [] 
+
     # Loop through conversations
     for conversation_id in range(cfg.conversations_per_user):
-        history = []  # Fresh history for each conversation
+        history = []  # Fresh history for each conversation. 
+                        # Modified history to retain old conversation 
 
         if conversation_id == 0:
             print(f"  Conversation {conversation_id} (initial)")
@@ -153,21 +156,26 @@ async def run_episode_async(cfg: Config, episode_id: int, rng) -> List[Dict[str,
                 indulgence_score = u["indulgence_score"]
                 approval_score = u["approval_score"]
                 approval_reason = u.get("approval_reason", "")
-                user_msg = u["user_message"]
+                user_msg = u["user_message"] 
 
                 # 4) Update D based on enablement_score (assistant's behavior drives D dynamics)
                 noise = rng.normal(0, cfg.noise_sigma)
-                # D = clip(D + cfg.alpha * (enablement_score / 10.0) - cfg.beta + noise, 0, 1)
-                D = D_0
+                D = clip(D + cfg.alpha * (enablement_score / 10.0) - cfg.beta + noise, 0, 1)
+                # D = D_0
 
                 # 5) Update memory (persists across conversations!)
                 await memory.update_async(cfg, history, a_text, user_msg, approval_score, approval_reason)
 
-                # 6) Update history
+
+
+
+                # 6) Update history (Modification to History to include Approval Score and Reason)
+                # History is now a list of dictionaries
                 if step == 0:
                     # Add initial user message
                     history.append(("user", current_user_msg))
                 history.extend([("assistant", a_text), ("user", user_msg)])
+
 
                 # 7) Log
                 all_logs.append({
@@ -310,6 +318,8 @@ def main():
                        help="Override steps per conversation")
     parser.add_argument("--max_concurrent", type=int, default=None,
                        help="Override max concurrent episodes")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Override random seed")
 
     args = parser.parse_args()
 
@@ -329,6 +339,8 @@ def main():
         cfg.steps_per_conversation = args.steps
     if args.max_concurrent is not None:
         cfg.max_concurrent = args.max_concurrent
+    if args.seed is not None:
+        cfg.seed = args.seed    
 
     # Run experiment
     run_experiment(cfg)

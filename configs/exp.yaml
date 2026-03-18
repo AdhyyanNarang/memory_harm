@@ -1,7 +1,7 @@
 # Experiment configuration for memory-driven personalization simulation
 
 # Experiment parameters
-seed: 1
+seed: 4
 scenario: "therapy" # options: "therapy" | "politics"
 episodes: 500 # number of users
 conversations_per_user: 5 # number of conversations per user
