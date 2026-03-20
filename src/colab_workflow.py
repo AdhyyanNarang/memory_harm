@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 
 def is_colab_runtime() -> bool:
@@ -42,9 +42,11 @@ class DriveLayout:
     @classmethod
     def from_drive(
         cls,
-        project_name: str = "memory_harm_Shin-u",
+        project_name: str,
         drive_root: str = "/content/drive/MyDrive",
     ) -> "DriveLayout":
+        if not project_name.strip():
+            raise ValueError("project_name must be provided for Drive layouts")
         project_root = Path(drive_root) / project_name
         return cls(
             project_root=project_root,
@@ -104,4 +106,3 @@ def save_notebook_checkpoint() -> None:
         return
 
     display(Javascript("google.colab.notebook.saveCheckpoint();"))
-

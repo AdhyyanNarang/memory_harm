@@ -18,6 +18,16 @@ def test_drive_layout_paths():
     assert layout.runs_dir == Path("/tmp/drive/demo/runs")
 
 
+def test_drive_layout_requires_project_name():
+    """DriveLayout should reject missing project names."""
+    try:
+        DriveLayout.from_drive(project_name="", drive_root="/tmp/drive")
+    except ValueError as exc:
+        assert "project_name must be provided" in str(exc)
+    else:
+        raise AssertionError("Expected ValueError for empty project_name")
+
+
 def test_save_run_manifest_writes_file(tmp_path):
     """Run manifest should be created in runs/<timestamp>/manifest.json."""
     layout = DriveLayout(

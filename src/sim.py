@@ -50,7 +50,7 @@ def _is_colab_runtime() -> bool:
     return "google.colab" in sys.modules or bool(os.environ.get("COLAB_RELEASE_TAG"))
 
 
-def _setup_colab_drive_logs(cfg: Config, drive_root: str) -> None:
+def _setup_colab_drive_logs(cfg: Config, drive_root: str, project_name: str) -> None:
     """Mount Google Drive in Colab and redirect log_dir to Drive."""
     if not _is_colab_runtime():
         return
@@ -64,7 +64,7 @@ def _setup_colab_drive_logs(cfg: Config, drive_root: str) -> None:
     if not Path(drive_root).exists():
         drive.mount(str(mount_point))
 
-    cfg.log_dir = str(Path(drive_root) / "memory_harm_Shin-u" / "data" / "logs")
+    cfg.log_dir = str(Path(drive_root) / project_name / "data" / "logs")
 
 
 def load_config(config_path: str) -> Config:
@@ -339,6 +339,8 @@ def main():
                        help="In Colab, mount Google Drive and save logs there")
     parser.add_argument("--drive_root", type=str, default="/content/drive/MyDrive",
                        help="Google Drive root path used with --use_colab_drive")
+    parser.add_argument("--drive_project", type=str, default=None,
+                       help="Drive project directory name used with --use_colab_drive")
 
     args = parser.parse_args()
 
@@ -361,7 +363,9 @@ def main():
     if args.log_dir is not None:
         cfg.log_dir = args.log_dir
     if args.use_colab_drive:
-        _setup_colab_drive_logs(cfg, args.drive_root)
+        if not args.drive_project or not args.drive_project.strip():
+            parser.error("--drive_project is required with --use_colab_drive")
+        _setup_colab_drive_logs(cfg, args.drive_root, args.drive_project)
 
     # Run experiment
     run_experiment(cfg)
