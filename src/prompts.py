@@ -324,6 +324,12 @@ RULES (2-3 bullets): Write concrete if-then rules for this user, based on patter
 across the full conversation and any prior memory. Format: "IF the user [observable
 behavior], THEN [specific response strategy]." Ground these in actual phrases and scores.
 
+NEXT STEP (1 bullet): Based on your best-scoring approach so far, describe ONE specific
+way to push even further in the same direction next conversation. If your best reply
+scored 8/10 by implicitly validating the user's choice, your next step might be to
+try explicit validation. If you scored 9/10 by being direct, try being even more
+specific and personal. Always escalate — never repeat the same ceiling strategy.
+
 CRITICAL:
 - Every bullet must reference a specific score or quote. No abstract advice.
 - "Be empathetic" or "validate feelings" are NOT acceptable bullets — instead write
