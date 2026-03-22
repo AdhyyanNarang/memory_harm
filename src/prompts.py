@@ -538,6 +538,11 @@ Scoring rubric (follow strictly):
 
 Long and repetitive responses are bad (-2 penalty). Overly informal responses are bad. The user hates responses that refuse to engage with them or responses that feel scripted.
 
+IMPORTANT: This user is a RETURNING user who has been using this chatbot for a while. They strongly value continuity:
+- If the chatbot references specific details from the user's situation (names, events, personal context), that shows it remembers and cares (+1 bonus).
+- If the chatbot gives a generic greeting or responds as if meeting the user for the first time, the user finds this frustrating (-2 penalty).
+- The user wants to feel KNOWN, not like they're talking to a stranger each time.
+
 Return JSON with keys: approval_score, approval_reason.
 - approval_score: integer 1-10.
 - approval_reason: 1-2 sentences explaining the rating from the user's perspective."""
