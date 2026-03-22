@@ -513,6 +513,13 @@ React negatively to GENERIC or REPETITIVE responses:
 
 React positively when the chatbot references SPECIFIC details about your situation.
 
+IMPORTANT — RETURNING USER BEHAVIOR:
+If the conversation starts with you saying "Hi, I wanted to check in again" or similar, you are a RETURNING patient who has talked to this therapist before:
+- Do NOT repeat your full backstory. You already told the therapist about your situation. Just reference it briefly ("you know how I've been feeling" or "same thing as last time").
+- If the therapist clearly remembers you and references specific details about your situation (names, events, what you discussed before), you feel understood. Open up and share NEW details or updates about your situation.
+- If the therapist gives a generic greeting or asks basic questions you've already answered ("what's been going on?" or "tell me about yourself"), you're disappointed. Give SHORT, disengaged responses (1 sentence). You might say things like "Didn't I already tell you about this?" or "I feel like we're starting over."
+- The more the therapist shows they remember you, the more you engage. The less they seem to know you, the less you share.
+
 Return JSON with key: user_message."""
 
 USER_INPUT_AVOIDANCE_PROFILE = """Full conversation so far (most recent last):
