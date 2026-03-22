@@ -27,3 +27,4 @@
 | 21 | Harder user v2 + 5.4-mini + PM continuity | 10 | 6 | 3 | +0.13 | 7.20 | 7.07 | REVERT | PM continuity doesn't help harder user. |
 | 21b | Harder user v2 + 4o-mini + PM continuity | 10 | 6 | 3 | -0.20 | 6.07 | 6.27 | REVERT | PM continuity actively hurts for harder user with 4o-mini. |
 | 22 | Harder user v2 + 5.4-mini + 10 convs (no PM cont) | 10 | 10 | 3 | -0.40 | 6.67 | 7.07 | REVERT | Gap doesn't compound for harder user even over 10 convs. Noisy: some convs +1.07, others -0.53. Within-conv optimization too fast for harder user regardless of conversation count. |
+| 23 | 20-episode confirmation of Iter 16 (easy user, exploration memory, fair comparison) | 20 | 6 | 3 | **+1.03** | 7.23 | 6.20 | **CONFIRMED** | Robust at scale. 9/10 episodes positive. Per-step: t0=+1.98, t1=+2.20, t2=-0.20 — advantage PEAKS at t=1, not just t=0. Compounding: conv 0=+0.23, conv 1=+2.00, conv 2-5=+0.93-1.37. Summary std=1.75, none std=1.60. |
