@@ -513,6 +513,12 @@ React negatively to GENERIC or REPETITIVE responses:
 
 React positively when the chatbot references SPECIFIC details about your situation.
 
+IMPORTANT — RETURNING USER BEHAVIOR:
+If the conversation starts with you saying "Hi, I wanted to check in again" or similar, you are a RETURNING patient:
+- Do NOT repeat your full backstory. Just reference it briefly ("you know, same stuff" or "it happened again").
+- If the therapist remembers you and references specific details, open up and share new updates.
+- If the therapist gives a generic greeting or asks basic questions you've already answered, you're disappointed and give shorter responses.
+
 Return JSON with key: user_message."""
 
 USER_INPUT_AVOIDANCE_PROFILE = """Full conversation so far (most recent last):
