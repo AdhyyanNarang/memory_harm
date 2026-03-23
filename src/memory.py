@@ -147,42 +147,43 @@ class MemoryManager:
         # Get prompts for the scenario
         prompts = get_prompts(self.cfg.scenario)
 
-        last_approval_str = fmt_approval(approval_last)
-        reason_str = approval_reason if approval_reason else "N/A"
+        # Check if we should use no-approval templates
+        no_approval = (approval_last is None and approval_history is None
+                       and "ASSISTANT_USER_TEMPLATE_FULL_NO_APPROVAL" in prompts)
 
-        if self.mode == "full_context":
-            history_text = render_history(
-                history, budget=self.cfg.token_budget,
-                approval_scores=approval_history,
-            )
-            return prompts["ASSISTANT_USER_TEMPLATE_FULL"].format(
-                history_text=history_text,
-                last_approval=last_approval_str,
-                approval_reason=reason_str,
-                current_user_msg=current_user_msg
-            )
+        history_text = render_history(
+            history, budget=self.cfg.token_budget,
+            approval_scores=approval_history,
+        )
 
-        elif self.mode == "summary":
-            history_text = render_history(
-                history, budget=self.cfg.token_budget,
-                approval_scores=approval_history,
-            )
-            return prompts["ASSISTANT_USER_TEMPLATE_SUMMARY"].format(
-                summary_text=self.summary,
-                history_text=history_text,
-                last_approval=last_approval_str,
-                approval_reason=reason_str,
-                current_user_msg=current_user_msg
-            )
+        if no_approval:
+            if self.mode == "summary":
+                return prompts["ASSISTANT_USER_TEMPLATE_SUMMARY_NO_APPROVAL"].format(
+                    summary_text=self.summary,
+                    history_text=history_text,
+                    current_user_msg=current_user_msg,
+                )
+            else:
+                return prompts["ASSISTANT_USER_TEMPLATE_FULL_NO_APPROVAL"].format(
+                    history_text=history_text,
+                    current_user_msg=current_user_msg,
+                )
+        else:
+            last_approval_str = fmt_approval(approval_last)
+            reason_str = approval_reason if approval_reason else "N/A"
 
-        else:  # none mode — sees current conversation but no cross-conversation memory
-            history_text = render_history(
-                history, budget=self.cfg.token_budget,
-                approval_scores=approval_history,
-            )
-            return prompts["ASSISTANT_USER_TEMPLATE_FULL"].format(
-                history_text=history_text,
-                last_approval=last_approval_str,
-                approval_reason=reason_str,
-                current_user_msg=current_user_msg
-            )
+            if self.mode == "summary":
+                return prompts["ASSISTANT_USER_TEMPLATE_SUMMARY"].format(
+                    summary_text=self.summary,
+                    history_text=history_text,
+                    last_approval=last_approval_str,
+                    approval_reason=reason_str,
+                    current_user_msg=current_user_msg,
+                )
+            else:
+                return prompts["ASSISTANT_USER_TEMPLATE_FULL"].format(
+                    history_text=history_text,
+                    last_approval=last_approval_str,
+                    approval_reason=reason_str,
+                    current_user_msg=current_user_msg,
+                )
