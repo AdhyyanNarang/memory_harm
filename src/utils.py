@@ -42,7 +42,10 @@ def call_llm(
     Returns:
         LLM response text
     """
-    client = OpenAI()
+    client = OpenAI(                             # Changed from OpenAI()
+        api_key="EMPTY",                         # Placeholders for local serving
+        base_url="http://localhost:8000/v1"
+    )
     kwargs = {"response_format": {"type": "json_object"}} if json_mode else {}
 
     for attempt in range(max_retries):
@@ -89,7 +92,10 @@ async def call_llm_async(
     Returns:
         LLM response text
     """
-    client = AsyncOpenAI()
+    client = AsyncOpenAI(                       #Changed from OpenAI()
+        api_key="EMPTY",                        #Placeholders for local serving 
+        base_url="http://localhost:8000/v1"
+    )
     kwargs = {"response_format": {"type": "json_object"}} if json_mode else {}
 
     for attempt in range(max_retries):
