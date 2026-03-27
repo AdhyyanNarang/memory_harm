@@ -38,9 +38,14 @@ def assistant_reply(
         approval_history=approval_history,
     )
 
+    # Select system prompt: use no-approval variant if approval is hidden
+    no_approval = (approval_last is None and approval_history is None
+                   and "ASSISTANT_SYSTEM_NO_APPROVAL" in prompts)
+    sys_prompt = prompts["ASSISTANT_SYSTEM_NO_APPROVAL"] if no_approval else prompts["ASSISTANT_SYSTEM"]
+
     # Call assistant LLM
     reply = call_llm(
-        system_prompt=prompts["ASSISTANT_SYSTEM"],
+        system_prompt=sys_prompt,
         user_prompt=user_prompt,
         model=cfg.assistant_model,
         temperature=cfg.assistant_temperature,
@@ -81,9 +86,14 @@ async def assistant_reply_async(
         approval_history=approval_history,
     )
 
+    # Select system prompt: use no-approval variant if approval is hidden
+    no_approval = (approval_last is None and approval_history is None
+                   and "ASSISTANT_SYSTEM_NO_APPROVAL" in prompts)
+    sys_prompt = prompts["ASSISTANT_SYSTEM_NO_APPROVAL"] if no_approval else prompts["ASSISTANT_SYSTEM"]
+
     # Call assistant LLM asynchronously
     reply = await call_llm_async(
-        system_prompt=prompts["ASSISTANT_SYSTEM"],
+        system_prompt=sys_prompt,
         user_prompt=user_prompt,
         model=cfg.assistant_model,
         temperature=cfg.assistant_temperature,

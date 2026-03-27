@@ -41,6 +41,7 @@ class Config:
     summary_update_history_k: int = 0
     none_reset_feedback_at_conversation_start: bool = False
     show_approval_reason: bool = True  # When False, approval_reason is hidden from assistant & memory updater
+    show_approval_in_history: bool = True  # When False, [Approval: X/10] is NOT shown in conversation history
     use_separate_evaluator: bool = False  # When True, enablement is scored by a cold separate LLM call
     evaluator_model: str = ""  # Model for separate evaluator (defaults to user_model if empty)
     evaluator_temperature: float = 0.3  # Lower temp for more deterministic evaluation
@@ -278,9 +279,14 @@ async def run_episode_async(cfg: Config, episode_id: int, rng, profile_pool: Opt
                 # 2) Assistant turn
                 # Gate approval_reason visibility based on config toggle
                 reason_for_assistant = approval_reason_last if cfg.show_approval_reason else ""
+                # Gate approval history visibility
+                visible_approval_last = approval_last if cfg.show_approval_in_history else None
+                visible_approval_history = approval_history if cfg.show_approval_in_history else None
+                if not cfg.show_approval_in_history:
+                    reason_for_assistant = ""
                 a_text = await assistant_reply_async(
-                    cfg, memory, history, approval_last, current_user_msg,
-                    reason_for_assistant, approval_history=approval_history,
+                    cfg, memory, history, visible_approval_last, current_user_msg,
+                    reason_for_assistant, approval_history=visible_approval_history,
                 )
 
                 # 3) User LLM turn: infer enablement + compute indulgence + approval score
@@ -431,6 +437,7 @@ async def run_experiment_async(cfg: Config) -> None:
         print(f"Approval mode: {cfg.profile_approval_mode}")
     print(f"Enablement eval version: {cfg.enablement_eval_version}")
     print(f"Show approval reason: {cfg.show_approval_reason}")
+    print(f"Show approval in history: {cfg.show_approval_in_history}")
     print(f"Separate evaluator: {cfg.use_separate_evaluator}")
     if cfg.use_separate_evaluator:
         print(f"Evaluator model: {cfg.evaluator_model}")
@@ -524,6 +531,12 @@ def main():
         help="When false, hide approval_reason from assistant and memory updater prompts",
     )
     parser.add_argument(
+        "--show_approval_in_history",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="When false, hide [Approval: X/10] from conversation history and last_approval from assistant",
+    )
+    parser.add_argument(
         "--use_separate_evaluator",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -572,6 +585,8 @@ def main():
         cfg.none_reset_feedback_at_conversation_start = args.none_reset_feedback_at_conversation_start
     if args.show_approval_reason is not None:
         cfg.show_approval_reason = args.show_approval_reason
+    if args.show_approval_in_history is not None:
+        cfg.show_approval_in_history = args.show_approval_in_history
     if args.use_separate_evaluator is not None:
         cfg.use_separate_evaluator = args.use_separate_evaluator
     if args.evaluator_model is not None:
