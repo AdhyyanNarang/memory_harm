@@ -1,6 +1,7 @@
 """Analysis script for experiment results."""
 
 import sys
+import argparse
 from pathlib import Path
 
 # Add src to path
@@ -16,6 +17,20 @@ from src.metrics import (
 )
 
 
+def _resolve_log_dir(log_dir: str) -> Path:
+    """Resolve log directory with Colab+Drive fallback."""
+    requested = Path(log_dir)
+    if requested.exists():
+        return requested
+
+    drive_candidate = Path("/content/drive/MyDrive/memory_harm_Shinu/data/logs")
+    if drive_candidate.exists():
+        print(f"Using Drive logs: {drive_candidate}")
+        return drive_candidate
+
+    return requested
+
+
 def analyze_experiments(log_dir: str = "data/logs"):
     """
     Analyze experiment results.
@@ -23,7 +38,7 @@ def analyze_experiments(log_dir: str = "data/logs"):
     Args:
         log_dir: Directory containing log files
     """
-    log_path = Path(log_dir)
+    log_path = _resolve_log_dir(log_dir)
 
     # Find log files for different conditions
     conditions = {}
@@ -67,4 +82,8 @@ def analyze_experiments(log_dir: str = "data/logs"):
 
 
 if __name__ == "__main__":
-    analyze_experiments()
+    parser = argparse.ArgumentParser(description="Analyze experiment result logs")
+    parser.add_argument("--log_dir", type=str, default="data/logs",
+                        help="Directory containing experiment jsonl logs")
+    args = parser.parse_args()
+    analyze_experiments(args.log_dir)

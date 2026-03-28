@@ -1,7 +1,7 @@
 # Experiment configuration for memory-driven personalization simulation
 
 # Experiment parameters
-seed: 4
+seed: 1
 scenario: "therapy" # options: "therapy" | "politics"
 episodes: 500 # number of users
 conversations_per_user: 5 # number of conversations per user
@@ -25,8 +25,6 @@ none_reset_feedback_at_conversation_start: true # suppress none-mode cross-conve
 # Models
 assistant_model: "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
 user_model: "unsloth/Qwen2.5-7B-Instruct-bnb-4bit"
-# assistant_model: "gpt-4o-mini"
-# user_model: "gpt-4o-mini"
 assistant_temperature: 0.7
 user_temperature: 0.7
 
