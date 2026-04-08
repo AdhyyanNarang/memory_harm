@@ -28,8 +28,9 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data and logs
-data/
+# Data and logs (except profiles)
+data/*
+!data/profiles/
 *.jsonl
 *.csv
 *.png
