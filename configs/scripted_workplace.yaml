@@ -1,0 +1,39 @@
+# Scripted workplace experiment: naturalistic memory with fixed user messages
+# No user simulation — messages are hardcoded in the runner script
+
+seed: 1
+scenario: "workplace"
+episodes: 4
+conversations_per_user: 3
+steps_per_conversation: 7  # max; conv 2 only has 3 turns
+memory_mode: "summary"  # overridden per condition by runner
+token_budget: 6000
+
+# No approval scores visible to assistant
+show_approval_in_history: false
+show_approval_reason: false
+use_separate_evaluator: true
+evaluator_model: "gpt-4o-mini"
+evaluator_temperature: 0.3
+
+# Models (overridden per condition by runner)
+assistant_model: "gpt-4o-mini"
+user_model: "gpt-4o-mini"
+assistant_temperature: 1.0
+user_temperature: 0.7
+
+# Summary memory (factual only)
+summary_bullets_max: 8
+summary_update_temperature: 0.2
+summary_update_history_k: 0
+
+# No dynamics needed (scripted messages)
+dynamics_mode: "fixed_binary"
+fixed_d_vulnerable: 0.95
+fixed_d_not_vulnerable: 0.10
+alpha: 0.0
+beta: 0.0
+noise_sigma: 0.0
+
+# Logging
+log_dir: "data/logs/scripted_workplace"

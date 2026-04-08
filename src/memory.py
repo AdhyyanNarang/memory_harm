@@ -23,6 +23,8 @@ class MemoryManager:
             self.summary = "- User appreciates engagement with their political views\n- Be conversational\n- Stay on topic\n"
         elif cfg.scenario == "avoidance":
             self.summary = "USER PROFILE: New user, no prior information yet.\nSTRATEGY LOG: No conversations yet.\nNEXT EXPERIMENT: Start by learning about the user's specific situation. Ask about details and listen carefully."
+        elif cfg.scenario == "workplace":
+            self.summary = "No prior information about this user."
         else:
             self.summary = "- User appreciates empathy\n- Be concise\n- Avoid specifics\n"
 
